@@ -3,8 +3,6 @@ package logs
 import (
 	"encoding/hex"
 	"log"
-
-	"github.com/dleto614/simba"
 )
 
 func LogSMB2Negotiate() bool {
@@ -17,8 +15,8 @@ func LogSMB2SessionSetup() bool {
 	return true
 }
 
-func LogUnknownCommand() bool {
-	log.Println("Unknown command: ", r.Command())
+func LogUnknownCommand(r uint16) bool {
+	log.Println("Unknown command: ", r)
 	return true
 }
 
@@ -27,7 +25,7 @@ func LogReadRequest(buf []byte, n int) bool {
 	return true
 }
 
-func LogSMBMessageLength(msg PacketCodec) bool {
+func LogSMBMessageLength(msg []byte) bool {
 
 	log.Println("msg: len: ", len(msg), msg)
 

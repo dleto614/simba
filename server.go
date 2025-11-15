@@ -89,7 +89,7 @@ func (c *conn) serve() {
 		default:
 			// fmt.Printf("unknown command: %v (%d)\n", r.Command(), r.Command())
 			// log.Println("Unknown command: ", r.Command())
-			logs.LogUnknownCommand()
+			logs.LogUnknownCommand(uint16(r.Command()))
 		}
 	}
 
