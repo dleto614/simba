@@ -1,8 +1,10 @@
 package logs
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
 	"os"
 )
 
@@ -40,6 +42,43 @@ func ChkReadRequest(err error) bool {
 		log.Println("Read request error:", err)
 		return false
 	}
+
+	return true
+}
+
+func LogNewConnection(rw net.Conn) bool {
+	log.Println("Accepted a new connection:", rw.RemoteAddr().String())
+
+	return true
+}
+
+func LogRemoteAddr(rwc net.Conn) bool {
+	log.Println("Remote addr:", rwc.RemoteAddr())
+
+	return true
+}
+
+func LogMechToken(mechToken []byte) bool {
+	log.Println("mechToken: ", hex.EncodeToString(mechToken))
+	log.Println("mechToken not encoded: ", mechToken)
+
+	return true
+}
+
+func LogNTLMNegotiate(ntlmsspPayload []byte) bool {
+	log.Println("NTLM_NEGOTIATE: ", len(ntlmsspPayload))
+
+	return true
+}
+
+func LogNTLMAuth(ntlmsspPayload []byte) bool {
+	log.Println("NTLMSSP_AUTH: ", len(ntlmsspPayload))
+
+	return true
+}
+
+func LogNTLMUnknown(ntlmsspPayloadMsgType uint32) bool {
+	log.Println("NTLMSSP unknown message type: ", ntlmsspPayloadMsgType)
 
 	return true
 }

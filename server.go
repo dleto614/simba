@@ -68,20 +68,18 @@ func (c *conn) serve() {
 			return
 		}
 
-		fmt.Printf("readRequest: %v\n", r)
+		// fmt.Printf("readRequest: %v\n", r)
 
 		switch r.Command() {
 		case SMB2_NEGOTIATE:
 			// fmt.Printf("SMB2_NEGOTIATE\n")
 			// log.Println("SMB2_NEGOTIATE")
-			logs.LogSMB2Negotiate()
 
 			msg := NegotiateRequest(r[64:])
 			c.handleNegotiate(r, msg)
 		case SMB2_SESSION_SETUP:
 			// fmt.Printf("SMB2_SESSION_SETUP\n")
 			// log.Println("SMB2_SESSION_SETUP")
-			logs.LogSMB2SessionSetup()
 
 			msg := SessionSetupRequest(r[64:])
 			c.handleSessionSetup(r, msg)
@@ -89,7 +87,6 @@ func (c *conn) serve() {
 		default:
 			// fmt.Printf("unknown command: %v (%d)\n", r.Command(), r.Command())
 			// log.Println("Unknown command: ", r.Command())
-			logs.LogUnknownCommand(uint16(r.Command()))
 		}
 	}
 
@@ -119,8 +116,6 @@ func (c *conn) readRequest() (w PacketCodec, err error) {
 	smb2Message := buf[4 : 4+stringProtocolLength]
 
 	msg := PacketCodec(smb2Message)
-	logs.LogSMBMessageLength(msg)
-
 	// msg := PacketCodec(smb2Message)
 	// log.Println("msg: len: ", len(msg), msg)
 	// if msg.IsInvalid() {
@@ -214,9 +209,6 @@ func (c *conn) handleNegotiate(p PacketCodec, msg NegotiateRequest) error {
 }
 
 func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error {
-	// fmt.Printf("handleSessionSetup request: %x\n", msg)
-	log.Println("handleSessionSetup request: ", msg)
-
 	// get NTLMSSP message
 	gssBuffer := msg.Buffer()
 	var mechToken []byte
@@ -224,7 +216,6 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 		gssPayload, err := auth.NewInitPayload(gssBuffer)
 		if err != nil {
 			// log.Printf("handleSessionSetup NewInitPayload: %v", err)
-			log.Println("handleSessionSetup NewInitPayload: ", err)
 			return fmt.Errorf("handleSessionSetup NewInitPayload: %v", err)
 		}
 		mechToken = gssPayload.Token.NegTokenInit.MechToken
@@ -232,7 +223,6 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 		gssPayload, err := auth.NewTargPayload(gssBuffer)
 		if err != nil {
 			// log.Printf("handleSessionSetup NewTargPayload: %v", err)
-			log.Println("handleSessionSetup NewTargPayload: ", err)
 			return fmt.Errorf("handleSessionSetup NewTargPayload: %v", err)
 		}
 		mechToken = gssPayload.ResponseToken
@@ -241,8 +231,14 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 
 	// get NTLMSSP message
 	// fmt.Printf("mechToken: %v\n", hex.EncodeToString(mechToken))
-	log.Println("mechToken: ", hex.EncodeToString(mechToken))
-	log.Println("mechToken not encoded: ", mechToken)
+	// log.Println("mechToken: ", hex.EncodeToString(mechToken))
+	// log.Println("mechToken not encoded: ", mechToken)
+
+	if len(mechToken) == 0 {
+		return fmt.Errorf("handleSessionSetup mechToken is empty")
+	} else {
+		logs.LogMechToken(mechToken)
+	}
 
 	ntlmsspPayload := auth.NTLMMessage(mechToken)
 
@@ -253,15 +249,17 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 	switch ntlmsspPayload.MessageType() {
 	case auth.NTLMSSP_NEGOTIATE:
 		// log.Printf("NTLM_NEGOTIATE: %v\n", len(ntlmsspPayload))
-		log.Println("NTLM_NEGOTIATE: ", len(ntlmsspPayload))
+		// log.Println("NTLM_NEGOTIATE: ", len(ntlmsspPayload))
 		return c.handleSessionSetupNtmlsspNetotiate(p, msg, auth.NTLMNegotiateMessage(mechToken))
 	case auth.NTLMSSP_AUTH:
 		// log.Printf("NTLMSSP_AUTH: %v\n", len(ntlmsspPayload))
-		log.Println("NTLMSSP_AUTH: ", len(ntlmsspPayload))
+		// log.Println("NTLMSSP_AUTH: ", len(ntlmsspPayload))
 		return c.handleSessionSetupNtmlsspAuth(p, msg, auth.NTLMNegotiateMessage(mechToken))
 	default:
 		// fmt.Printf("NTLMSSP unknown message type: %0x\n", ntlmsspPayload.MessageType())
-		log.Println("NTLMSSP unknown message type: ", ntlmsspPayload.MessageType())
+		// log.Println("NTLMSSP unknown message type: ", ntlmsspPayload.MessageType())
+
+		logs.LogNTLMUnknown(ntlmsspPayload.MessageType())
 
 		// ????
 
