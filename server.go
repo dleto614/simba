@@ -73,28 +73,20 @@ func (c *conn) serve() {
 
 		switch r.Command() {
 		case SMB2_NEGOTIATE:
-			// fmt.Printf("SMB2_NEGOTIATE\n")
-			// log.Println("SMB2_NEGOTIATE")
-
-			fmt.Println("SMB2 Negotiate request...")
-			fmt.Println("Trying to handle the negotiate request...")
+			log.Println("Recieved SMB2 Negotiate request. Trying to handle the negotiate request.")
 
 			msg := NegotiateRequest(r[64:])
 			c.handleNegotiate(r, msg)
-		case SMB2_SESSION_SETUP:
-			// fmt.Printf("SMB2_SESSION_SETUP\n")
-			// log.Println("SMB2_SESSION_SETUP")
 
-			fmt.Println("SMB2 Session Setup request...")
-			fmt.Println("Trying to handle the session setup request...")
+		case SMB2_SESSION_SETUP:
+			log.Println("Recieved SMB2 Session Setup request. Trying to handle the session setup request.")
 
 			msg := SessionSetupRequest(r[64:])
 			c.handleSessionSetup(r, msg)
 
 		default:
-			// fmt.Printf("unknown command: %v (%d)\n", r.Command(), r.Command())
-			// log.Println("Unknown command: ", r.Command())
-			fmt.Println("Unknown command recieved: ", r.Command())
+			log.Println("Unknown command recieved: ", r.Command())
+
 		}
 	}
 
@@ -194,10 +186,7 @@ func (c *conn) handleNegotiate(p PacketCodec, msg NegotiateRequest) error {
 	pkt = append(pkt, smb2Header...)
 	pkt = append(pkt, responseHdr...)
 
-	log.Println("handleNegotiate: ", hex.EncodeToString(pkt))
 	c.rwc.Write(pkt)
-
-	log.Println("send response: ", len(pkt))
 
 	return nil
 

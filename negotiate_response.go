@@ -1,6 +1,7 @@
 package simba
 
 import (
+	"fmt"
 	"log"
 	"time"
 )
@@ -135,13 +136,18 @@ func (r NegotiateResponse) ServerStartTime() time.Time {
 }
 
 func (r NegotiateResponse) SetServerStartTime(v time.Time) {
-	log.Println("SMB2: SetServerStartTime", v)
+	readableTime := v.Format("2006-01-02 15:04:05")
+
+	// Print it to the terminal
+	fmt.Println("Server Start Time:", readableTime)
+
 	if v.IsZero() {
 		log.Println("SMB2: ServerStartTime is zero")
 		le.PutUint32(r[48:52], 0)
 		le.PutUint32(r[52:56], 0)
 		return
 	}
+
 	dateTime := v.UnixNano()/100 + 116444736000000000
 	dwLowDateTime := uint32(dateTime)
 	dwHighDateTime := uint32(dateTime >> 32)
@@ -179,7 +185,7 @@ func (r NegotiateResponse) Buffer() []byte {
 	offset := r.SecurityBufferOffset() - 64
 	length := r.SecurityBufferLength()
 	if offset+length > uint16(len(r)) {
-		log.Printf("warning: negotiate response buffer is out of bounds (offset=%d, length=%d, len=%d)", offset, length, len(r))
+		log.Printf("Warning: negotiate response buffer is out of bounds (offset=%d, length=%d, len=%d)", offset, length, len(r))
 		return nil
 	}
 	return r[offset : offset+length]

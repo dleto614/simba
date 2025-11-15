@@ -63,23 +63,13 @@ func LogMechToken(mechToken []byte) bool {
 		log.Println("mechToken is empty")
 		return false
 	} else {
-		log.Println("mechToken: ", hex.EncodeToString(mechToken))
-		log.Println("mechToken not encoded: ", mechToken)
+
+		// This is what we want for the ntlm hash thing.
+		log.Println("Token:", hex.EncodeToString(mechToken))
+		log.Println("Token not encoded:", mechToken)
 
 		return true
 	}
-}
-
-func LogNTLMNegotiate(ntlmsspPayload []byte) bool {
-	log.Println("NTLM_NEGOTIATE: ", len(ntlmsspPayload))
-
-	return true
-}
-
-func LogNTLMAuth(ntlmsspPayload []byte) bool {
-	log.Println("NTLMSSP_AUTH: ", len(ntlmsspPayload))
-
-	return true
 }
 
 func LogNTLMUnknown(ntlmsspPayloadMsgType uint32) bool {
