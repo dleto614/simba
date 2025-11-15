@@ -1,7 +1,6 @@
 package debug
 
 import (
-	"encoding/hex"
 	"log"
 )
 
@@ -12,9 +11,4 @@ func LogSMBMessageLength(msg []byte) bool {
 
 	return true
 
-}
-
-func LogReadRequest(buf []byte, n int) bool {
-	log.Println("[DEBUG] Read request: ", hex.EncodeToString(buf[:n]), n)
-	return true
 }
