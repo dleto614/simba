@@ -59,10 +59,15 @@ func LogRemoteAddr(rwc net.Conn) bool {
 }
 
 func LogMechToken(mechToken []byte) bool {
-	log.Println("mechToken: ", hex.EncodeToString(mechToken))
-	log.Println("mechToken not encoded: ", mechToken)
+	if len(mechToken) == 0 {
+		log.Println("mechToken is empty")
+		return false
+	} else {
+		log.Println("mechToken: ", hex.EncodeToString(mechToken))
+		log.Println("mechToken not encoded: ", mechToken)
 
-	return true
+		return true
+	}
 }
 
 func LogNTLMNegotiate(ntlmsspPayload []byte) bool {

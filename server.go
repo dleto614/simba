@@ -36,8 +36,8 @@ func (srv *Server) Serve(l net.Listener) error {
 
 			return err
 		}
-		// fmt.Printf("Accept a new connection: %v\n", rw)
 		logs.LogNewConnection(rw)
+
 		c := srv.newConn(rw)
 		go c.serve()
 	}
@@ -48,6 +48,7 @@ func (srv *Server) newConn(rw net.Conn) *conn {
 		server: srv,
 		rwc:    rw,
 	}
+
 	return c
 }
 
@@ -75,11 +76,17 @@ func (c *conn) serve() {
 			// fmt.Printf("SMB2_NEGOTIATE\n")
 			// log.Println("SMB2_NEGOTIATE")
 
+			fmt.Println("SMB2 Negotiate request...")
+			fmt.Println("Trying to handle the negotiate request...")
+
 			msg := NegotiateRequest(r[64:])
 			c.handleNegotiate(r, msg)
 		case SMB2_SESSION_SETUP:
 			// fmt.Printf("SMB2_SESSION_SETUP\n")
 			// log.Println("SMB2_SESSION_SETUP")
+
+			fmt.Println("SMB2 Session Setup request...")
+			fmt.Println("Trying to handle the session setup request...")
 
 			msg := SessionSetupRequest(r[64:])
 			c.handleSessionSetup(r, msg)
@@ -87,6 +94,7 @@ func (c *conn) serve() {
 		default:
 			// fmt.Printf("unknown command: %v (%d)\n", r.Command(), r.Command())
 			// log.Println("Unknown command: ", r.Command())
+			fmt.Println("Unknown command recieved: ", r.Command())
 		}
 	}
 
@@ -103,7 +111,9 @@ func (c *conn) readRequest() (w PacketCodec, err error) {
 	// fmt.Printf("readRequest: %v len: %d\n", hex.EncodeToString(buf[:n]), n)
 	// log.Println("Read request: ", hex.EncodeToString(buf[:n]), n)
 	// zero := buf[0]
+
 	stringProtocolLength := (uint32(buf[1]) << 16) + (uint32(buf[2]) << 8) + uint32(buf[3])
+
 	// TODO: using loop to read all data
 	if n < int(stringProtocolLength) {
 		n2, err := c.rwc.Read(buf[n:])
@@ -116,23 +126,12 @@ func (c *conn) readRequest() (w PacketCodec, err error) {
 	smb2Message := buf[4 : 4+stringProtocolLength]
 
 	msg := PacketCodec(smb2Message)
-	// msg := PacketCodec(smb2Message)
-	// log.Println("msg: len: ", len(msg), msg)
-	// if msg.IsInvalid() {
-	// 	log.Println("msg is invalid")
-	// 	return nil, fmt.Errorf("msg is invalid")
-	// }
-
-	// log.Println("msg type: ", msg.Command())
 
 	return msg, nil
 
 }
 
 func (c *conn) handleNegotiate(p PacketCodec, msg NegotiateRequest) error {
-	// fmt.Printf("handleNegotiate: %v\n", msg.ClientGuid())
-	log.Println("Handle negotiate: ", msg.ClientGuid())
-
 	securityBufferPayload := auth.DefaultNegoPayload
 
 	negotiateContextPreauth := NegotiateContext(make([]byte, 8+38))
@@ -191,17 +190,13 @@ func (c *conn) handleNegotiate(p PacketCodec, msg NegotiateRequest) error {
 	netBIOSHeader[3] = byte(l)
 	netBIOSHeader[2] = byte(l >> 8)
 
-	// smb2Header := []byte{0xfe, 0x53, 0x4d, 0x42, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-
 	pkt = append(pkt, netBIOSHeader...)
 	pkt = append(pkt, smb2Header...)
 	pkt = append(pkt, responseHdr...)
-	// pkt = append(pkt, responseBody...)
 
-	// fmt.Printf("handleNegotiate: %v\n", hex.EncodeToString(pkt))
 	log.Println("handleNegotiate: ", hex.EncodeToString(pkt))
 	c.rwc.Write(pkt)
-	// fmt.Printf("send response: %d\n", len(pkt))
+
 	log.Println("send response: ", len(pkt))
 
 	return nil
@@ -215,29 +210,25 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 	if gssBuffer[0] == 0x60 {
 		gssPayload, err := auth.NewInitPayload(gssBuffer)
 		if err != nil {
-			// log.Printf("handleSessionSetup NewInitPayload: %v", err)
 			return fmt.Errorf("handleSessionSetup NewInitPayload: %v", err)
+
 		}
 		mechToken = gssPayload.Token.NegTokenInit.MechToken
+
 	} else if gssBuffer[0] == 0xa1 {
 		gssPayload, err := auth.NewTargPayload(gssBuffer)
 		if err != nil {
-			// log.Printf("handleSessionSetup NewTargPayload: %v", err)
 			return fmt.Errorf("handleSessionSetup NewTargPayload: %v", err)
+
 		}
 		mechToken = gssPayload.ResponseToken
 
 	}
 
-	// get NTLMSSP message
-	// fmt.Printf("mechToken: %v\n", hex.EncodeToString(mechToken))
-	// log.Println("mechToken: ", hex.EncodeToString(mechToken))
-	// log.Println("mechToken not encoded: ", mechToken)
+	if logs.LogMechToken(mechToken) == false {
 
-	if len(mechToken) == 0 {
+		// Will fix this later.
 		return fmt.Errorf("handleSessionSetup mechToken is empty")
-	} else {
-		logs.LogMechToken(mechToken)
 	}
 
 	ntlmsspPayload := auth.NTLMMessage(mechToken)
@@ -248,17 +239,12 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 
 	switch ntlmsspPayload.MessageType() {
 	case auth.NTLMSSP_NEGOTIATE:
-		// log.Printf("NTLM_NEGOTIATE: %v\n", len(ntlmsspPayload))
-		// log.Println("NTLM_NEGOTIATE: ", len(ntlmsspPayload))
 		return c.handleSessionSetupNtmlsspNetotiate(p, msg, auth.NTLMNegotiateMessage(mechToken))
-	case auth.NTLMSSP_AUTH:
-		// log.Printf("NTLMSSP_AUTH: %v\n", len(ntlmsspPayload))
-		// log.Println("NTLMSSP_AUTH: ", len(ntlmsspPayload))
-		return c.handleSessionSetupNtmlsspAuth(p, msg, auth.NTLMNegotiateMessage(mechToken))
-	default:
-		// fmt.Printf("NTLMSSP unknown message type: %0x\n", ntlmsspPayload.MessageType())
-		// log.Println("NTLMSSP unknown message type: ", ntlmsspPayload.MessageType())
 
+	case auth.NTLMSSP_AUTH:
+		return c.handleSessionSetupNtmlsspAuth(p, msg, auth.NTLMNegotiateMessage(mechToken))
+
+	default:
 		logs.LogNTLMUnknown(ntlmsspPayload.MessageType())
 
 		// ????
@@ -274,8 +260,7 @@ func (c *conn) handleSessionSetupNtmlsspNetotiate(p PacketCodec, msg SessionSetu
 
 	pkt := []byte{}
 	securityBuffer, _ := hex.DecodeString("a181c43081c1a0030a0101a10c060a2b06010401823702020aa281ab0481a84e544c4d5353500002000000140014003800000015828ae2ade8f7c5b20b941000000000000000005c005c004c000000060100000000000f4d00420056004d00320032003100320030003800020014004d00420056004d00320032003100320030003800010014004d00420056004d0032003200310032003000380004000000030014006d00620076006d0032003200310032003000380007000800a421b4497870d90100000000")
-	// log.Printf("securityBuffer lenght: %v", len(securityBuffer))
-	log.Println("securityBuffer: ", hex.EncodeToString(securityBuffer))
+
 	responseHdr := SessionSetupResponse(make([]byte, 8+len(securityBuffer)))
 	responseHdr.SetStructureSize()
 	responseHdr.SetSecurityBufferOffset(0x48)
@@ -294,34 +279,19 @@ func (c *conn) handleSessionSetupNtmlsspNetotiate(p PacketCodec, msg SessionSetu
 	smb2Header.SetNextCommand(0)
 	smb2Header.SetMessageId(p.MessageId())
 	smb2Header.SetTreeId(0)
-	// if sessionID == 0 {
-	// 	sessionID = 0xebc20a15
-	// } else {
-	// 	sessionID++
-	// }
-	// fmt.Printf("p.SessionId(): %v\n", p.SessionId())
-	log.Println("p.SessionId(): ", p.SessionId())
 	smb2Header.SetSessionId(sessionID)
 	smb2Header.SetSignature([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
 
 	l := len(smb2Header) + len(responseHdr)
-	// log.Printf("smb2 length: %v, resp len: %v\n", len(smb2Header), len(responseHdr))
-	log.Println("smb2 length: ", len(smb2Header), " resp len: ", len(responseHdr))
 	netBIOSHeader := []byte{0x00, 0x00, 0x00, 0x00}
 	netBIOSHeader[3] = byte(l)
 	netBIOSHeader[2] = byte(l >> 8)
-
-	// smb2Header := []byte{0xfe, 0x53, 0x4d, 0x42, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
 	pkt = append(pkt, netBIOSHeader...)
 	pkt = append(pkt, smb2Header...)
 	pkt = append(pkt, responseHdr...)
 
-	// fmt.Printf("handleSessionSetup response 1: %v\n", hex.EncodeToString(pkt))
-	log.Println("handleSessionSetup response 1: ", hex.EncodeToString(pkt))
 	c.rwc.Write(pkt)
-	// fmt.Printf("send response: %d\n", len(pkt))
-	log.Println("send response: ", len(pkt))
 
 	return nil
 }
@@ -356,8 +326,7 @@ func (c *conn) handleSessionSetupNtmlsspAuth(p PacketCodec, msg SessionSetupRequ
 	smb2Header.SetSignature([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
 
 	l := len(smb2Header) + len(responseHdr)
-	// log.Printf("smb2 length: %v, resp len: %v\n", len(smb2Header), len(responseHdr))
-	log.Println("smb2 length: ", len(smb2Header), " resp len: ", len(responseHdr))
+
 	netBIOSHeader := []byte{0x00, 0x00, 0x00, 0x00}
 	netBIOSHeader[3] = byte(l)
 	netBIOSHeader[2] = byte(l >> 8)
@@ -368,11 +337,7 @@ func (c *conn) handleSessionSetupNtmlsspAuth(p PacketCodec, msg SessionSetupRequ
 	pkt = append(pkt, smb2Header...)
 	pkt = append(pkt, responseHdr...)
 
-	// fmt.Printf("handleSessionSetup response 2: %v\n", hex.EncodeToString(pkt))
-	log.Println("handleSessionSetup response 2: ", hex.EncodeToString(pkt))
 	c.rwc.Write(pkt)
-	// fmt.Printf("send response: %d\n", len(pkt))
-	log.Println("send response: ", len(pkt))
 
 	return nil
 }
