@@ -16,23 +16,13 @@ var serverGUID = []byte{0x6d, 0x62, 0x76, 0x6d, 0x32, 0x32, 0x31, 0x32, 0x30, 0x
 // TODO: change to a session manager
 var sessionID = uint64(2023)
 
-// Session represents an authenticated SMB session
-type Session struct {
-	ID            uint64
-	User          string
-	Authenticated bool
-	CreatedAt     time.Time
-}
-
 type conn struct {
 	server *Server
 
 	// rwc is the underlying network connection.
 	rwc net.Conn
 
-	remoteAddr    string
-	authenticated bool
-	session       *Session
+	remoteAddr string
 }
 
 type response struct {
@@ -43,6 +33,7 @@ func (srv *Server) Serve(l net.Listener) error {
 	for {
 		rw, err := l.Accept()
 		if err != nil {
+
 			return err
 		}
 		logs.LogNewConnection(rw)
@@ -62,16 +53,14 @@ func (srv *Server) newConn(rw net.Conn) *conn {
 }
 
 func (c *conn) serve() {
+	// fmt.Printf("remote addr: %v\n", c.rwc.RemoteAddr())
+	// log.Println("Remote addr: ", c.rwc.RemoteAddr())
+
 	logs.LogRemoteAddr(c.rwc)
+
 	c.remoteAddr = c.rwc.RemoteAddr().String()
 
-	defer func() {
-		if err := c.rwc.Close(); err != nil {
-			log.Printf("Error closing connection: %v", err)
-		} else {
-			log.Printf("Connection closed gracefully from %s", c.remoteAddr)
-		}
-	}()
+	defer c.rwc.Close()
 
 	for {
 		r, err := c.readRequest()
@@ -80,51 +69,27 @@ func (c *conn) serve() {
 			return
 		}
 
+		// fmt.Printf("readRequest: %v\n", r)
+
 		switch r.Command() {
 		case SMB2_NEGOTIATE:
-			log.Println("Received SMB2 Negotiate request. Trying to handle the negotiate request.")
+			log.Println("Recieved SMB2 Negotiate request. Trying to handle the negotiate request.")
+
 			msg := NegotiateRequest(r[64:])
 			c.handleNegotiate(r, msg)
 
 		case SMB2_SESSION_SETUP:
-			log.Println("Received SMB2 Session Setup request. Trying to handle the session setup request.")
+			log.Println("Recieved SMB2 Session Setup request. Trying to handle the session setup request.")
+
 			msg := SessionSetupRequest(r[64:])
 			c.handleSessionSetup(r, msg)
 
-		// Add handling for other commands after authentication
-		case SMB2_TREE_CONNECT:
-			if !c.authenticated {
-				log.Println("Tree connect request before authentication")
-				c.sendError(r, STATUS_ACCESS_DENIED)
-				continue
-			}
-			log.Println("Received SMB2 Tree Connect request.")
-			// Handle tree connect
-
-		case SMB2_CREATE:
-			if !c.authenticated {
-				log.Println("Create request before authentication")
-				c.sendError(r, STATUS_ACCESS_DENIED)
-				continue
-			}
-			log.Println("Received SMB2 Create request.")
-			// Handle create
-
-		case SMB2_LOGOFF:
-			if !c.authenticated {
-				log.Println("Logoff request before authentication")
-				c.sendError(r, STATUS_ACCESS_DENIED)
-				continue
-			}
-			log.Println("Received SMB2 Logoff request.")
-			c.handleLogoff(r)
-			return
-
 		default:
-			log.Println("Unknown command received: ", r.Command())
-			c.sendError(r, STATUS_INVALID_PARAMETER)
+			log.Println("Unknown command recieved: ", r.Command())
+
 		}
 	}
+
 }
 
 func (c *conn) readRequest() (w PacketCodec, err error) {
@@ -133,6 +98,11 @@ func (c *conn) readRequest() (w PacketCodec, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// From NetBIOS
+	// fmt.Printf("readRequest: %v len: %d\n", hex.EncodeToString(buf[:n]), n)
+	// log.Println("Read request: ", hex.EncodeToString(buf[:n]), n)
+	// zero := buf[0]
 
 	stringProtocolLength := (uint32(buf[1]) << 16) + (uint32(buf[2]) << 8) + uint32(buf[3])
 
@@ -150,66 +120,7 @@ func (c *conn) readRequest() (w PacketCodec, err error) {
 	msg := PacketCodec(smb2Message)
 
 	return msg, nil
-}
 
-func (c *conn) sendError(request PacketCodec, status uint32) {
-	response := PacketCodec(make([]byte, 64))
-	response.SetProtocolId()
-	response.SetStructureSize()
-	response.SetCreditCharge(1)
-	response.SetCommand(request.Command())
-	response.SetStatus(status)
-	response.SetCreditRequestResponse(1)
-	response.SetFlags(SMB2_FLAGS_SERVER_TO_REDIR)
-	response.SetNextCommand(0)
-	response.SetMessageId(request.MessageId())
-	response.SetTreeId(request.TreeId())
-	response.SetSessionId(request.SessionId())
-	response.SetSignature([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
-
-	l := len(response)
-	netBIOSHeader := []byte{0x00, 0x00, 0x00, 0x00}
-	netBIOSHeader[3] = byte(l)
-	netBIOSHeader[2] = byte(l >> 8)
-
-	pkt := append(netBIOSHeader, response...)
-	c.rwc.Write(pkt)
-}
-
-func (c *conn) handleLogoff(request PacketCodec) {
-	response := PacketCodec(make([]byte, 4))
-	response[0] = 0x04 // StructureSize
-	response[1] = 0x00
-	response[2] = 0x00
-	response[3] = 0x00 // Reserved
-
-	smb2Header := PacketCodec(make([]byte, 64))
-	smb2Header.SetProtocolId()
-	smb2Header.SetStructureSize()
-	smb2Header.SetCreditCharge(1)
-	smb2Header.SetCommand(SMB2_LOGOFF)
-	smb2Header.SetStatus(STATUS_SUCCESS)
-	smb2Header.SetCreditRequestResponse(1)
-	smb2Header.SetFlags(SMB2_FLAGS_SERVER_TO_REDIR)
-	smb2Header.SetNextCommand(0)
-	smb2Header.SetMessageId(request.MessageId())
-	smb2Header.SetTreeId(request.TreeId())
-	smb2Header.SetSessionId(request.SessionId())
-	smb2Header.SetSignature([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
-
-	l := len(smb2Header) + len(response)
-	netBIOSHeader := []byte{0x00, 0x00, 0x00, 0x00}
-	netBIOSHeader[3] = byte(l)
-	netBIOSHeader[2] = byte(l >> 8)
-
-	pkt := append(netBIOSHeader, smb2Header...)
-	pkt = append(pkt, response...)
-
-	c.rwc.Write(pkt)
-
-	// Mark as unauthenticated
-	c.authenticated = false
-	c.session = nil
 }
 
 func (c *conn) handleNegotiate(p PacketCodec, msg NegotiateRequest) error {
@@ -278,6 +189,7 @@ func (c *conn) handleNegotiate(p PacketCodec, msg NegotiateRequest) error {
 	c.rwc.Write(pkt)
 
 	return nil
+
 }
 
 func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error {
@@ -288,6 +200,7 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 		gssPayload, err := auth.NewInitPayload(gssBuffer)
 		if err != nil {
 			return fmt.Errorf("handleSessionSetup NewInitPayload: %v", err)
+
 		}
 		mechToken = gssPayload.Token.NegTokenInit.MechToken
 
@@ -295,11 +208,14 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 		gssPayload, err := auth.NewTargPayload(gssBuffer)
 		if err != nil {
 			return fmt.Errorf("handleSessionSetup NewTargPayload: %v", err)
+
 		}
 		mechToken = gssPayload.ResponseToken
+
 	}
 
 	if logs.LogMechToken(mechToken) == false {
+
 		// Will fix this later.
 		return fmt.Errorf("handleSessionSetup mechToken is empty")
 	}
@@ -319,11 +235,18 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 
 	default:
 		logs.LogNTLMUnknown(ntlmsspPayload.MessageType())
+
+		// ????
+
+		// case auth.NTLM_CHALLENGE:
+		// 	fmt.Printf("NTLM_CHALLENGE: %v\n", ntlmsspPayload)
+		// case auth.NTLM_AUTHENTICATE:
+		// 	fmt.Printf("NTLM_AUTHENTICATE: %v\n", ntlmsspPayload)
 	}
 	return fmt.Errorf("unknown ntlm message type: %0x\n", ntlmsspPayload.MessageType())
 }
-
 func (c *conn) handleSessionSetupNtmlsspNetotiate(p PacketCodec, msg SessionSetupRequest, ntlpPayload auth.NTLMNegotiateMessage) error {
+
 	pkt := []byte{}
 	securityBuffer, _ := hex.DecodeString("a181c43081c1a0030a0101a10c060a2b06010401823702020aa281ab0481a84e544c4d5353500002000000140014003800000015828ae2ade8f7c5b20b941000000000000000005c005c004c000000060100000000000f4d00420056004d00320032003100320030003800020014004d00420056004d00320032003100320030003800010014004d00420056004d0032003200310032003000380004000000030014006d00620076006d0032003200310032003000380007000800a421b4497870d90100000000")
 
@@ -332,6 +255,7 @@ func (c *conn) handleSessionSetupNtmlsspNetotiate(p PacketCodec, msg SessionSetu
 	responseHdr.SetSecurityBufferOffset(0x48)
 	responseHdr.SetSecurityBufferLength(uint16(len(securityBuffer)))
 	responseHdr.SetBuffer(securityBuffer)
+	// responseHdr.SetSecurityMode(Securi)
 
 	smb2Header := PacketCodec(make([]byte, 64, 64))
 	smb2Header.SetProtocolId()
@@ -361,17 +285,7 @@ func (c *conn) handleSessionSetupNtmlsspNetotiate(p PacketCodec, msg SessionSetu
 	return nil
 }
 
-func (c *conn) handleSessionSetupNtmlsspAuth(p PacketCodec, msg SessionSetupRequest, ntlmPayload auth.NTLMNegotiateMessage) error {
-	// Create a new session
-	session := &Session{
-		ID:            p.SessionId(), // Use the session ID from the request
-		User:          "guest",       // In a real implementation, extract from auth
-		Authenticated: true,
-		CreatedAt:     time.Now(),
-	}
-
-	c.session = session
-	c.authenticated = true
+func (c *conn) handleSessionSetupNtmlsspAuth(p PacketCodec, msg SessionSetupRequest, ntlpPayload auth.NTLMNegotiateMessage) error {
 
 	pkt := []byte{}
 	responseHdr := SessionSetupResponse(make([]byte, 8))
@@ -379,25 +293,34 @@ func (c *conn) handleSessionSetupNtmlsspAuth(p PacketCodec, msg SessionSetupRequ
 	responseHdr.SetSessionFlags(SMB2_SESSION_FLAG_IS_GUEST | SMB2_SESSION_FLAG_IS_NULL)
 	responseHdr.SetSecurityBufferOffset(0)
 	responseHdr.SetSecurityBufferLength(0)
+	// responseHdr.SetSecurityMode(Securi)
 
 	smb2Header := PacketCodec(make([]byte, 64))
 	smb2Header.SetProtocolId()
 	smb2Header.SetStructureSize()
 	smb2Header.SetCreditCharge(1)
 	smb2Header.SetCommand(SMB2_SESSION_SETUP)
-	smb2Header.SetStatus(STATUS_SUCCESS) // Changed from STATUS_LOGON_FAILURE
+	smb2Header.SetStatus(STATUS_LOGON_FAILURE)
 	smb2Header.SetCreditRequestResponse(1)
 	smb2Header.SetFlags(SMB2_FLAGS_SERVER_TO_REDIR)
 	smb2Header.SetNextCommand(0)
 	smb2Header.SetMessageId(p.MessageId())
 	smb2Header.SetTreeId(0)
-	smb2Header.SetSessionId(session.ID)
+	// if sessionID == 0 {
+	// 	sessionID = 0xebc20a15
+	// } else {
+	// 	sessionID++
+	// }
+	smb2Header.SetSessionId(p.SessionId())
 	smb2Header.SetSignature([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
 
 	l := len(smb2Header) + len(responseHdr)
+
 	netBIOSHeader := []byte{0x00, 0x00, 0x00, 0x00}
 	netBIOSHeader[3] = byte(l)
 	netBIOSHeader[2] = byte(l >> 8)
+
+	// smb2Header := []byte{0xfe, 0x53, 0x4d, 0x42, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
 	pkt = append(pkt, netBIOSHeader...)
 	pkt = append(pkt, smb2Header...)
