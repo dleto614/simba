@@ -1,6 +1,7 @@
 package simba
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -246,40 +247,26 @@ func (c *conn) handleSessionSetup(p PacketCodec, msg SessionSetupRequest) error 
 	return fmt.Errorf("unknown ntlm message type: %0x\n", ntlmsspPayload.MessageType())
 }
 func (c *conn) handleSessionSetupNtmlsspNetotiate(p PacketCodec, msg SessionSetupRequest, ntlpPayload auth.NTLMNegotiateMessage) error {
-
-	pkt := []byte{}
+	// Decode your hardcoded security buffer to get the full NTLM Type 2 message
 	securityBuffer, _ := hex.DecodeString("a181c43081c1a0030a0101a10c060a2b06010401823702020aa281ab0481a84e544c4d5353500002000000140014003800000015828ae2ade8f7c5b20b941000000000000000005c005c004c000000060100000000000f4d00420056004d00320032003100320030003800020014004d00420056004d00320032003100320030003800010014004d00420056004d0032003200310032003000380004000000030014006d00620076006d0032003200310032003000380007000800a421b4497870d90100000000")
 
-	responseHdr := SessionSetupResponse(make([]byte, 8+len(securityBuffer)))
-	responseHdr.SetStructureSize()
-	responseHdr.SetSecurityBufferOffset(0x48)
-	responseHdr.SetSecurityBufferLength(uint16(len(securityBuffer)))
-	responseHdr.SetBuffer(securityBuffer)
-	// responseHdr.SetSecurityMode(Securi)
+	// The NTLM Type 2 message starts after the GSS-API wrapper.
+	// Find the "NTLMSSP" signature.
+	ntlmStart := bytes.Index(securityBuffer, []byte("NTLMSSP"))
+	if ntlmStart == -1 {
+		return fmt.Errorf("Could not find NTLMSSP signature in security buffer")
+	}
+	ntlmType2Message := securityBuffer[ntlmStart:]
 
-	smb2Header := PacketCodec(make([]byte, 64, 64))
-	smb2Header.SetProtocolId()
-	smb2Header.SetStructureSize()
-	smb2Header.SetCreditCharge(1)
-	smb2Header.SetCommand(SMB2_SESSION_SETUP)
-	smb2Header.SetStatus(STATUS_MORE_PROCESSING_REQUIRED)
-	smb2Header.SetCreditRequestResponse(1)
-	smb2Header.SetFlags(SMB2_FLAGS_SERVER_TO_REDIR)
-	smb2Header.SetNextCommand(0)
-	smb2Header.SetMessageId(p.MessageId())
-	smb2Header.SetTreeId(0)
-	smb2Header.SetSessionId(sessionID)
-	smb2Header.SetSignature([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	// The server challenge is at a fixed offset of 24 in the NTLM Type 2 message
+	serverChallenge := ntlmType2Message[24:32]
 
-	l := len(smb2Header) + len(responseHdr)
-	netBIOSHeader := []byte{0x00, 0x00, 0x00, 0x00}
-	netBIOSHeader[3] = byte(l)
-	netBIOSHeader[2] = byte(l >> 8)
+	// LOG THE CHALLENGE BEING USED
+	log.Printf("!!! SENDING SERVER CHALLENGE: %x !!!", serverChallenge)
 
-	pkt = append(pkt, netBIOSHeader...)
-	pkt = append(pkt, smb2Header...)
-	pkt = append(pkt, responseHdr...)
-
+	// ... rest of your function to build and send the packet ...
+	pkt := []byte{}
+	// ... (your existing packet building code)
 	c.rwc.Write(pkt)
 
 	return nil
