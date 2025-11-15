@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dleto614/simba/auth"
+	"github.com/dleto614/simba/logs"
 )
 
 var serverGUID = []byte{0x6d, 0x62, 0x76, 0x6d, 0x32, 0x32, 0x31, 0x32, 0x30, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
@@ -36,7 +37,7 @@ func (srv *Server) Serve(l net.Listener) error {
 			return err
 		}
 		// fmt.Printf("Accept a new connection: %v\n", rw)
-		log.Println("Accept a new connection: ", rw.RemoteAddr().String())
+		logs.LogNewConnection(rw)
 		c := srv.newConn(rw)
 		go c.serve()
 	}
@@ -52,35 +53,43 @@ func (srv *Server) newConn(rw net.Conn) *conn {
 
 func (c *conn) serve() {
 	// fmt.Printf("remote addr: %v\n", c.rwc.RemoteAddr())
-	log.Println("Remote addr: ", c.rwc.RemoteAddr())
+	// log.Println("Remote addr: ", c.rwc.RemoteAddr())
+
+	logs.LogRemoteAddr(c.rwc)
+
 	c.remoteAddr = c.rwc.RemoteAddr().String()
 
 	defer c.rwc.Close()
 
 	for {
 		r, err := c.readRequest()
-		if err != nil {
-			// fmt.Printf("readRequest error: %v\n", err)
-			log.Println("Read request error: ", err)
+
+		if (logs.ChkReadRequest(err)) == false {
 			return
 		}
+
 		fmt.Printf("readRequest: %v\n", r)
 
 		switch r.Command() {
 		case SMB2_NEGOTIATE:
 			// fmt.Printf("SMB2_NEGOTIATE\n")
-			log.Println("SMB2_NEGOTIATE")
+			// log.Println("SMB2_NEGOTIATE")
+			logs.LogSMB2Negotiate()
+
 			msg := NegotiateRequest(r[64:])
 			c.handleNegotiate(r, msg)
 		case SMB2_SESSION_SETUP:
 			// fmt.Printf("SMB2_SESSION_SETUP\n")
-			log.Println("SMB2_SESSION_SETUP")
+			// log.Println("SMB2_SESSION_SETUP")
+			logs.LogSMB2SessionSetup()
+
 			msg := SessionSetupRequest(r[64:])
 			c.handleSessionSetup(r, msg)
 
 		default:
 			// fmt.Printf("unknown command: %v (%d)\n", r.Command(), r.Command())
-			log.Println("Unknown command: ", r.Command())
+			// log.Println("Unknown command: ", r.Command())
+			logs.LogUnknownCommand()
 		}
 	}
 
@@ -95,7 +104,7 @@ func (c *conn) readRequest() (w PacketCodec, err error) {
 
 	// From NetBIOS
 	// fmt.Printf("readRequest: %v len: %d\n", hex.EncodeToString(buf[:n]), n)
-	log.Println("Read request: ", hex.EncodeToString(buf[:n]), n)
+	// log.Println("Read request: ", hex.EncodeToString(buf[:n]), n)
 	// zero := buf[0]
 	stringProtocolLength := (uint32(buf[1]) << 16) + (uint32(buf[2]) << 8) + uint32(buf[3])
 	// TODO: using loop to read all data
@@ -110,16 +119,16 @@ func (c *conn) readRequest() (w PacketCodec, err error) {
 	smb2Message := buf[4 : 4+stringProtocolLength]
 
 	msg := PacketCodec(smb2Message)
-	// fmt.Printf("msg: len: %d data: %+v\n", len(msg), msg)
-	log.Println("msg: len: ", len(msg), msg)
-	if msg.IsInvalid() {
-		// fmt.Printf("msg is invalid\n")
-		log.Println("msg is invalid")
-		return nil, fmt.Errorf("msg is invalid")
-	}
+	logs.LogSMBMessageLength(msg)
 
-	// fmt.Printf("msg type: %v\n", msg.Command())
-	log.Println("msg type: ", msg.Command())
+	// msg := PacketCodec(smb2Message)
+	// log.Println("msg: len: ", len(msg), msg)
+	// if msg.IsInvalid() {
+	// 	log.Println("msg is invalid")
+	// 	return nil, fmt.Errorf("msg is invalid")
+	// }
+
+	// log.Println("msg type: ", msg.Command())
 
 	return msg, nil
 

@@ -3,7 +3,6 @@ package logs
 import (
 	"fmt"
 	"log"
-	"net"
 	"os"
 )
 
@@ -35,7 +34,12 @@ func ChkServerInit(err error) bool {
 	return true
 }
 
-func LogNewConnection(rw net.Conn) bool {
-	log.Println("Accept a new connection: ", rw.RemoteAddr().String())
+func ChkReadRequest(err error) bool {
+	if err != nil {
+		// fmt.Printf("readRequest error: %v\n", err)
+		log.Println("Read request error: ", err)
+		return false
+	}
+
 	return true
 }
