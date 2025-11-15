@@ -328,7 +328,9 @@ func (c *conn) handleSessionSetupNtmlsspAuth(p PacketCodec, msg SessionSetupRequ
 	pkt = append(pkt, smb2Header...)
 	pkt = append(pkt, responseHdr...)
 
+	fmt.Printf("handleSessionSetup response 2: %v\n", hex.EncodeToString(pkt))
 	c.rwc.Write(pkt)
+	fmt.Printf("send response: %d\n", len(pkt))
 
 	return nil
 }
