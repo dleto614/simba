@@ -18,7 +18,7 @@ func ChkFlags([]string) bool {
 
 func ChkReadFile(err error) bool {
 	if err != nil {
-		log.Println("Error reading file: ", err)
+		log.Println("Error reading file:", err)
 		return false
 	}
 
@@ -27,7 +27,7 @@ func ChkReadFile(err error) bool {
 
 func ChkServerInit(err error) bool {
 	if err != nil {
-		log.Println("Error starting server: ", err)
+		log.Println("Error starting server:", err)
 		return false
 	}
 
@@ -37,7 +37,7 @@ func ChkServerInit(err error) bool {
 func ChkReadRequest(err error) bool {
 	if err != nil {
 		// fmt.Printf("readRequest error: %v\n", err)
-		log.Println("Read request error: ", err)
+		log.Println("Read request error:", err)
 		return false
 	}
 
