@@ -1,6 +1,6 @@
-github.com/dleto614/simba v0.0.3 h1:Pd7CFtziwob12yOmN8EIsF5b11zDqjocMN2RL6VLTzI=
-github.com/dleto614/simba v0.0.3/go.mod h1:8Oq1JzvRlQ6egVzTt4TssDxXAAkMVT1mbUQ178bU+bg=
-github.com/dleto614/simba v0.0.4-0.20251115025302-170c0896f9f1 h1:O0Co/g8UP+dg+GwRZOBUA7sXdCNiDw+V4BDVaixgm58=
-github.com/dleto614/simba v0.0.4-0.20251115025302-170c0896f9f1/go.mod h1:8Oq1JzvRlQ6egVzTt4TssDxXAAkMVT1mbUQ178bU+bg=
+github.com/dleto614/simba v0.0.7 h1:RJrrpBhAPt3VALOR7h2rOywzVa6z/cJdf8rWfCbiB9w=
+github.com/dleto614/simba v0.0.7/go.mod h1:jMMx3N348fErpAhFVACofm/+jiDog/dslLK0TYwoKL4=
+github.com/dleto614/simba v0.0.8-0.20251122021229-1dcd861b3cea h1:zPg++kSn47X2/L6Q/MgbX5BRGTh9/9QF9kCdpexFYd0=
+github.com/dleto614/simba v0.0.8-0.20251122021229-1dcd861b3cea/go.mod h1:jMMx3N348fErpAhFVACofm/+jiDog/dslLK0TYwoKL4=
 golang.org/x/crypto v0.44.0 h1:A97SsFvM3AIwEEmTBiaxPPTYpDC47w720rdiiUvgoAU=
 golang.org/x/crypto v0.44.0/go.mod h1:013i+Nw79BMiQiMsOPcVCB5ZIJbYkerPrGnOa00tvmc=
