@@ -29,9 +29,9 @@ type response struct {
 	conn *conn
 }
 
-func (srv *Server) Serve(l net.Listener) error {
+func (srv *Server) Serve(listener net.Listener, output string) error {
 	for {
-		rw, err := l.Accept()
+		rw, err := listener.Accept()
 		if err != nil {
 
 			return err
@@ -39,7 +39,7 @@ func (srv *Server) Serve(l net.Listener) error {
 		logs.LogNewConnection(rw)
 
 		c := srv.newConn(rw)
-		go c.serve()
+		go c.serve(output)
 	}
 }
 
@@ -52,11 +52,11 @@ func (srv *Server) newConn(rw net.Conn) *conn {
 	return c
 }
 
-func (c *conn) serve() {
+func (c *conn) serve(output string) {
 	// fmt.Printf("remote addr: %v\n", c.rwc.RemoteAddr())
 	// log.Println("Remote addr: ", c.rwc.RemoteAddr())
 
-	logs.LogRemoteAddr(c.rwc)
+	logs.LogRemoteAddr(c.rwc) // Log remote address
 
 	c.remoteAddr = c.rwc.RemoteAddr().String()
 

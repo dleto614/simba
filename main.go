@@ -13,11 +13,11 @@ var (
 	le = binary.LittleEndian
 )
 
-func (srv *Server) ListenAndServe(port string) error {
+func (srv *Server) ListenAndServe(server string, output string) error {
 	// addr := srv.Addr
-	ln, err := net.Listen("tcp", port)
+	ln, err := net.Listen("tcp", server)
 	if err != nil {
 		return err
 	}
-	return srv.Serve(ln)
+	return srv.Serve(ln, output)
 }

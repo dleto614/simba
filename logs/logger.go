@@ -2,21 +2,16 @@ package logs
 
 import (
 	"encoding/hex"
-	"fmt"
 	"log"
 	"net"
-	"os"
 )
 
-func ChkFlags([]string) bool {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run ntlm_parser.go <log_file>")
-		return false
-	}
+// Might use this function at some port, but for now this is fine
+// func ChkFlags([]string) bool {
 
-	return true // Successfully inputted correct
+// 	return true // Successfully inputted correct
 
-}
+// }
 
 func ChkReadFile(err error) bool {
 	if err != nil {
